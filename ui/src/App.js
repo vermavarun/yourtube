@@ -1,29 +1,34 @@
 import "./App.css";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 function App() {
-  const [data, setData] = useState(""); // [1]
+  const [data, setData] = useState('');
+  const vedo = React.createRef();
 
-  function getBackendData() {
-    fetch("http://localhost:8080/")
-      .then((response) => response.text())
-      .then((data) => {
-        console.log(data);
-        setData(data);
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-      });
-  }
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/videou',{headers: {range: 'bytes=0'}});
+
+        vedo.current.src = URL.createObjectURL(await response.blob());
+
+      } catch (error) {
+        // Handle other errors
+      }
+    };
+
+    fetchData();
+  }, []);
+
   return (
     <div className="App">
       <header className="App-header">
         <p>{data}</p>
-        <video width="320" height="240" controls>
-          <source src="http://localhost:8080/video" type="video/mp4" />
+        <video ref={vedo} width="320" height="240" controls>
+          <source src={data} type="video/mp4" />
           <track kind="captions" src="captions.vtt" label="English" />
         </video>
-        <button onClick={getBackendData}>Get Data from Backend</button>
+        <button>Get Data from Backend</button>
       </header>
     </div>
   );

@@ -1,17 +1,20 @@
+// https://blog.logrocket.com/build-video-streaming-server-node/
+// https://www.youtube.com/watch?v=XfX2Ap30pwU
 const express = require('express');
 const cors = require('cors');
 const fs = require("fs");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-app.use(cors({
-    'allowedHeaders': ['sessionId', 'Content-Type'],
-    'exposedHeaders': ['sessionId'],
-    'origin': 'http://localhost:3002',
-    'methods': 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    'preflightContinue': false
-  }));
+// app.use(cors({
+//     'allowedHeaders': ['sessionId', 'Content-Type'],
+//     'exposedHeaders': ['sessionId'],
+//     'origin': 'http://localhost:3000',
+//     'methods': 'GET,HEAD,PUT,PATCH,POST,DELETE',
+//     'preflightContinue': false
+//   }));
 
 
 
@@ -22,6 +25,15 @@ app.get('/', (req, res) => {
 app.get("/view", function (req, res) {
     res.sendFile(__dirname + "/index.html");
 });
+
+
+app.get("/videou", function (req, res) {
+    const videoPath = "data/sample.mp4";
+
+    const videoStream = fs.createReadStream(videoPath);
+    videoStream.pipe(res);
+});
+
 
 app.get("/video", function (req, res) {
     const range = req.headers.range;
