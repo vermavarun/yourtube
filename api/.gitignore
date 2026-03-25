@@ -1,0 +1,15 @@
+bin
+obj
+*.user
+*.suo
+.vs
+videos/*.mp4
+videos/*.webm
+
+# Environment files
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+# OS files
+.DS_Store

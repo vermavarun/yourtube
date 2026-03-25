@@ -1,0 +1,20 @@
+{
+  "folders": [
+    {
+      "path": "ui",
+      "name": "Frontend (Next.js)"
+    },
+    {
+      "path": "api",
+      "name": "Backend (.NET)"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/bin": true,
+      "**/obj": true,
+      "**/.next": true
+    }
+  }
+}
