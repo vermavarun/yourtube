@@ -1,7 +1,7 @@
 // Service Worker for secure video streaming
 // Intercepts video requests and adds authentication token from sessionStorage
 
-const CACHE_NAME = 'video-sw-v5'; // FIXED: Force same-origin mode to allow custom headers!
+const CACHE_NAME = 'video-sw-v7'; // FIXED: Use Accept header instead of referer to detect browser navigation
 const VIDEO_API_PATTERN = /\/api\/video\/[^?]+/;
 
 // Install event - activate immediately
@@ -36,6 +36,14 @@ self.addEventListener('fetch', (event) => {
   if (!VIDEO_API_PATTERN.test(url.pathname)) {
     console.log('[Service Worker] Not a video request, letting through');
     return; // Don't call event.respondWith, let browser handle it normally
+  }
+
+  // Don't intercept direct browser navigation (Accept: text/html)
+  // Video player requests will have Accept: */* or video/*
+  const accept = event.request.headers.get('accept') || '';
+  if (accept.includes('text/html')) {
+    console.log('[Service Worker] Direct browser navigation detected (Accept: text/html), skipping intercept');
+    return; // Let it pass through to API which will show HTML error page
   }
 
   // Don't intercept requests that already have the auth header (from our own fetch)
