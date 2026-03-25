@@ -5,6 +5,97 @@ import { verifyVideoToken } from '@/lib/token';
 const DOTNET_API_URL = process.env.DOTNET_API_URL || 'http://localhost:5000';
 const API_SHARED_SECRET = process.env.API_SHARED_SECRET || 'shared-secret';
 
+// Helper to check if request expects HTML response (browser vs video player)
+function expectsHtml(request: NextRequest): boolean {
+  const accept = request.headers.get('accept') || '';
+  return accept.includes('text/html');
+}
+
+// Custom HTML error page for direct browser access
+function getErrorHtml(title: string, message: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title}</title>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #333;
+        }
+        .container {
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+          padding: 60px 40px;
+          text-align: center;
+          max-width: 500px;
+          margin: 20px;
+        }
+        .error-code {
+          font-size: 120px;
+          font-weight: 700;
+          color: #667eea;
+          line-height: 1;
+          margin-bottom: 20px;
+        }
+        h1 {
+          font-size: 32px;
+          font-weight: 600;
+          margin-bottom: 15px;
+          color: #2d3748;
+        }
+        p {
+          font-size: 16px;
+          color: #718096;
+          margin-bottom: 30px;
+          line-height: 1.6;
+        }
+        .btn {
+          display: inline-block;
+          padding: 12px 30px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: 500;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .icon {
+          font-size: 80px;
+          margin-bottom: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="icon">🔒</div>
+        <div class="error-code">404</div>
+        <h1>${title}</h1>
+        <p>${message}</p>
+        <a href="/" class="btn">Go to Homepage</a>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -12,16 +103,30 @@ export async function GET(
   try {
     const encryptedId = params.id;
 
+    // FIRST: Check if this is a direct browser access (before any other checks)
+    // Direct browser access has no referer header and expects HTML
+    const referer = request.headers.get('referer');
+    const accept = request.headers.get('accept') || '';
+
+    // If no referer AND requesting HTML, it's a direct browser access - block immediately
+    if (!referer && accept.includes('text/html')) {
+      console.log('[API] Direct browser access detected, showing error page');
+      return new NextResponse(
+        getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+        { status: 404, headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+
     console.log('[API] Request received for video:', encryptedId);
     console.log('[API] Request headers:', {
-      referer: request.headers.get('referer'),
+      referer: referer,
       host: request.headers.get('host'),
+      accept: accept.substring(0, 50),
       'x-video-token': request.headers.get('X-Video-Token') ? 'present' : 'missing',
       'user-agent': request.headers.get('user-agent')?.substring(0, 50)
     });
 
     // Security Layer 1: Check Referer header (relaxed for localhost development)
-    const referer = request.headers.get('referer');
     const host = request.headers.get('host');
 
     // In development, allow localhost requests
@@ -29,6 +134,14 @@ export async function GET(
 
     if (!isDevelopment && (!referer || !referer.includes(`${host}/watch`))) {
       console.error('Referer check failed:', { referer, host });
+
+      if (expectsHtml(request)) {
+        return new NextResponse(
+          getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+          { status: 404, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Direct access not allowed' },
         { status: 403 }
@@ -42,6 +155,14 @@ export async function GET(
     if (!token) {
       console.error('[API] No token provided in header or query');
       console.error('[API] All headers:', Array.from(request.headers.entries()));
+
+      if (expectsHtml(request)) {
+        return new NextResponse(
+          getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+          { status: 404, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Access token required' },
         { status: 401 }
@@ -53,6 +174,14 @@ export async function GET(
     const isValidToken = await verifyVideoToken(token, encryptedId);
     if (!isValidToken) {
       console.error('[API] Invalid token');
+
+      if (expectsHtml(request)) {
+        return new NextResponse(
+          getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+          { status: 404, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Invalid or expired token' },
         { status: 403 }
@@ -65,6 +194,14 @@ export async function GET(
 
     if (!videoId) {
       console.error('Failed to decrypt video ID');
+
+      if (expectsHtml(request)) {
+        return new NextResponse(
+          getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+          { status: 404, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Invalid video ID' },
         { status: 400 }
@@ -97,6 +234,13 @@ export async function GET(
     });
 
     if (!response.ok) {
+      if (expectsHtml(request)) {
+        return new NextResponse(
+          getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+          { status: 404, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Failed to fetch video' },
         { status: response.status }
@@ -113,6 +257,13 @@ export async function GET(
     const body = response.body;
 
     if (!body) {
+      if (expectsHtml(request)) {
+        return new NextResponse(
+          getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+          { status: 404, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'No video data' },
         { status: 500 }
@@ -147,6 +298,14 @@ export async function GET(
 
   } catch (error) {
     console.error('Video proxy error:', error);
+
+    if (expectsHtml(request)) {
+      return new NextResponse(
+        getErrorHtml('Nothing Found', 'The content you are looking for does not exist or cannot be accessed directly.'),
+        { status: 404, headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
